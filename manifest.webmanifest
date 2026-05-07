@@ -1,0 +1,19 @@
+{
+  "name": "Multiples Maze",
+  "short_name": "Maze 9s",
+  "description": "A math maze game where only multiples of 9 are safe.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#efe6cf",
+  "theme_color": "#14324a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

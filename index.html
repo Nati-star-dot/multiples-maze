@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiples Maze</title>
+  <meta name="theme-color" content="#14324a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Multiples Maze">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hud">
+      <div>
+        <p class="eyebrow">Math Maze</p>
+        <h1>Multiples Of 9</h1>
+      </div>
+      <div class="stats">
+        <div class="stat-card">
+          <span>Current</span>
+          <strong id="current-number">1</strong>
+        </div>
+        <div class="stat-card">
+          <span>Safe Hits</span>
+          <strong id="safe-count">0/10</strong>
+        </div>
+        <div class="stat-card">
+          <span>Restarts</span>
+          <strong id="restart-count">0</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="arena">
+      <div class="status-row">
+        <p id="message">Start as 1. Every square has a number. Step only on numbers divisible by 9.</p>
+        <button id="restart-button" type="button">Restart</button>
+      </div>
+      <canvas id="game" width="660" height="660" aria-label="Math maze board"></canvas>
+      <div class="touch-controls" aria-label="Touch controls">
+        <button class="control-button up" type="button" data-direction="up" aria-label="Move up">▲</button>
+        <button class="control-button left" type="button" data-direction="left" aria-label="Move left">◀</button>
+        <button class="control-button down" type="button" data-direction="down" aria-label="Move down">▼</button>
+        <button class="control-button right" type="button" data-direction="right" aria-label="Move right">▶</button>
+      </div>
+      <div class="controls">
+        <p>Controls: Arrow keys or WASD</p>
+        <p>The antidote is hidden in the numbered grid. Wrong numbers reset the board.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js");
+      });
+    }
+  </script>
+</body>
+</html>
