@@ -1,4 +1,4 @@
-const CACHE_NAME = "multiples-maze-v1";
+const CACHE_NAME = "multiples-maze-v3";
 const APP_ASSETS = [
   "./",
   "./index.html",

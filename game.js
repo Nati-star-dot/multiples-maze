@@ -12,8 +12,8 @@ const cols = 13;
 const tileSize = canvas.width / cols;
 const startPosition = { row: 12, col: 6 };
 const antidotePosition = { row: 0, col: 6 };
-const minPathSteps = 9;
-const maxPathSteps = 12;
+const minPathSteps = 15;
+const maxPathSteps = 22;
 
 let grid;
 let player;
@@ -22,7 +22,9 @@ let restartCount;
 let currentNumber;
 let safeNumbers;
 let safeSet;
+let safeCellKeys;
 let antidoteNumber;
+let previousPathSignature = "";
 
 function keyFor(row, col) {
   return `${row},${col}`;
@@ -59,94 +61,174 @@ function neighborCells(row, col) {
   ].filter((cell) => isInside(cell.row, cell.col));
 }
 
-function manhattan(a, b) {
-  return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
+function pathHasVariedShape(path) {
+  let horizontalMoves = 0;
+  let turns = 0;
+  let previousDirection = null;
+
+  for (let index = 1; index < path.length; index += 1) {
+    const previous = fromKey(path[index - 1]);
+    const current = fromKey(path[index]);
+    const direction = {
+      row: Math.sign(current.row - previous.row),
+      col: Math.sign(current.col - previous.col),
+    };
+
+    if (direction.col !== 0) {
+      horizontalMoves += 1;
+    }
+
+    if (
+      previousDirection &&
+      (previousDirection.row !== direction.row || previousDirection.col !== direction.col)
+    ) {
+      turns += 1;
+    }
+
+    previousDirection = direction;
+  }
+
+  return horizontalMoves >= 4 && turns >= 4;
 }
 
 function createHiddenPath() {
-  const targetSteps = randomInt(minPathSteps, maxPathSteps);
   const startKey = keyFor(startPosition.row, startPosition.col);
   const antidoteKey = keyFor(antidotePosition.row, antidotePosition.col);
 
-  function search(current, visited, path) {
-    const currentKey = keyFor(current.row, current.col);
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const turnRows = shuffle([10, 9, 8, 7, 6, 5, 4, 3, 2])
+      .slice(0, 3)
+      .sort((left, right) => right - left);
+    const firstSide = Math.random() < 0.5 ? -1 : 1;
+    const columns = turnRows.map((_, index) => {
+      const direction = index % 2 === 0 ? firstSide : -firstSide;
+      return startPosition.col + direction * randomInt(1, 2);
+    });
+    const path = [startKey];
+    const visited = new Set(path);
+    const current = { ...startPosition };
 
-    if (currentKey === antidoteKey) {
-      const steps = path.length - 1;
-      return steps >= minPathSteps && steps <= maxPathSteps ? [...path] : null;
-    }
-
-    const stepsUsed = path.length - 1;
-    if (stepsUsed >= maxPathSteps) {
-      return null;
-    }
-
-    const distance = manhattan(current, antidotePosition);
-    if (stepsUsed + distance > maxPathSteps) {
-      return null;
-    }
-
-    const neighbors = shuffle(neighborCells(current.row, current.col))
-      .filter((cell) => {
-        const cellKey = keyFor(cell.row, cell.col);
-        return !visited.has(cellKey);
-      })
-      .sort((left, right) => {
-        const leftDistance = manhattan(left, antidotePosition);
-        const rightDistance = manhattan(right, antidotePosition);
-        if (stepsUsed < targetSteps - 4) {
-          return rightDistance - leftDistance;
-        }
-        return leftDistance - rightDistance;
-      });
-
-    for (const neighbor of neighbors) {
-      const neighborKey = keyFor(neighbor.row, neighbor.col);
-      visited.add(neighborKey);
-      path.push(neighborKey);
-
-      const result = search(neighbor, visited, path);
-      if (result) {
-        return result;
+    function append(row, col) {
+      const nextKey = keyFor(row, col);
+      if (visited.has(nextKey)) {
+        return false;
       }
-
-      path.pop();
-      visited.delete(neighborKey);
+      visited.add(nextKey);
+      path.push(nextKey);
+      current.row = row;
+      current.col = col;
+      return true;
     }
 
-    return null;
-  }
+    function walkHorizontal(targetCol) {
+      while (current.col !== targetCol) {
+        const step = Math.sign(targetCol - current.col);
+        if (!append(current.row, current.col + step)) {
+          return false;
+        }
+      }
+      return true;
+    }
 
-  for (let attempt = 0; attempt < 150; attempt += 1) {
-    const visited = new Set([startKey]);
-    const path = search({ ...startPosition }, visited, [startKey]);
-    if (path) {
+    function walkVertical(targetRow) {
+      while (current.row !== targetRow) {
+        const step = Math.sign(targetRow - current.row);
+        if (!append(current.row + step, current.col)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const ok = turnRows.every((row, index) => {
+      return walkHorizontal(columns[index]) && walkVertical(row);
+    }) && walkHorizontal(startPosition.col) && walkVertical(antidotePosition.row);
+
+    const steps = path.length - 1;
+    if (
+      ok &&
+      path[path.length - 1] === antidoteKey &&
+      steps >= minPathSteps &&
+      steps <= maxPathSteps &&
+      pathHasVariedShape(path) &&
+      path.join("|") !== previousPathSignature
+    ) {
       return path;
     }
   }
 
-  return [
-    startKey,
-    keyFor(11, 6),
-    keyFor(10, 6),
-    keyFor(9, 6),
-    keyFor(8, 6),
-    keyFor(7, 6),
-    keyFor(6, 6),
-    keyFor(5, 6),
-    keyFor(4, 6),
-    keyFor(3, 6),
-    keyFor(2, 6),
-    keyFor(1, 6),
-    antidoteKey,
+  const fallbackPaths = [
+    [
+      startKey,
+      keyFor(11, 6),
+      keyFor(10, 6),
+      keyFor(10, 5),
+      keyFor(9, 5),
+      keyFor(8, 5),
+      keyFor(8, 6),
+      keyFor(7, 6),
+      keyFor(6, 6),
+      keyFor(6, 7),
+      keyFor(5, 7),
+      keyFor(4, 7),
+      keyFor(4, 6),
+      keyFor(3, 6),
+      keyFor(2, 6),
+      keyFor(1, 6),
+      antidoteKey,
+    ],
+    [
+      startKey,
+      keyFor(12, 5),
+      keyFor(11, 5),
+      keyFor(10, 5),
+      keyFor(10, 6),
+      keyFor(9, 6),
+      keyFor(8, 6),
+      keyFor(8, 5),
+      keyFor(7, 5),
+      keyFor(6, 5),
+      keyFor(6, 6),
+      keyFor(5, 6),
+      keyFor(4, 6),
+      keyFor(3, 6),
+      keyFor(2, 6),
+      keyFor(1, 6),
+      antidoteKey,
+    ],
+    [
+      startKey,
+      keyFor(12, 7),
+      keyFor(11, 7),
+      keyFor(10, 7),
+      keyFor(10, 6),
+      keyFor(9, 6),
+      keyFor(8, 6),
+      keyFor(8, 7),
+      keyFor(7, 7),
+      keyFor(6, 7),
+      keyFor(6, 6),
+      keyFor(5, 6),
+      keyFor(4, 6),
+      keyFor(3, 6),
+      keyFor(2, 6),
+      keyFor(1, 6),
+      antidoteKey,
+    ],
   ];
+
+  return shuffle(fallbackPaths).find((path) => path.join("|") !== previousPathSignature) || fallbackPaths[0];
 }
 
 function generateSafeNumbers(count) {
-  const pool = shuffle(
-    Array.from({ length: 11 }, (_, index) => (index + 2) * 9)
-  );
-  return [9, ...pool.slice(0, Math.min(count - 1, pool.length))];
+  const repeatedPool = [];
+  const tableAfterNine = Array.from({ length: 11 }, (_, index) => (index + 2) * 9);
+
+  while (repeatedPool.length < count - 1) {
+    repeatedPool.push(...shuffle(tableAfterNine));
+  }
+
+  return [9, ...repeatedPool.slice(0, count - 1)];
 }
 
 function generateTrapNumbers(count) {
@@ -160,6 +242,7 @@ function generateTrapNumbers(count) {
 function buildRunGrid() {
   const nextGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
   const hiddenPath = createHiddenPath();
+  previousPathSignature = hiddenPath.join("|");
   const pathNumbers = hiddenPath.slice(1);
   const pathSet = new Set(pathNumbers);
   const trapNumbers = generateTrapNumbers(rows * cols + 16);
@@ -172,6 +255,7 @@ function buildRunGrid() {
 
   safeNumbers = generateSafeNumbers(pathNumbers.length);
   safeSet = new Set(safeNumbers);
+  safeCellKeys = new Set(pathNumbers);
   antidoteNumber = safeNumbers[safeNumbers.length - 1];
 
   for (let row = 0; row < rows; row += 1) {
@@ -237,8 +321,9 @@ function drawBoard() {
       const x = col * tileSize;
       const y = row * tileSize;
       const value = grid[row][col];
+      const cellKey = keyFor(row, col);
       const isStart = row === startPosition.row && col === startPosition.col;
-      const isCollected = collectedSafe.has(value);
+      const isCollected = collectedSafe.has(cellKey);
 
       context.fillStyle = isStart ? "#dbeafe" : "#fbf7ef";
       if (isCollected) {
@@ -310,6 +395,7 @@ function movePlayer(direction) {
   }
 
   const number = grid[nextRow][nextCol];
+  const currentKey = keyFor(nextRow, nextCol);
   player.row = nextRow;
   player.col = nextCol;
   currentNumber = number;
@@ -321,14 +407,14 @@ function movePlayer(direction) {
     return;
   }
 
-  if (!safeSet.has(number)) {
+  if (!safeSet.has(number) || !safeCellKeys.has(currentKey)) {
     draw();
     handleTrap(number);
     draw();
     return;
   }
 
-  collectedSafe.add(number);
+  collectedSafe.add(currentKey);
   updateHud();
 
   if (nextRow === antidotePosition.row && nextCol === antidotePosition.col) {
