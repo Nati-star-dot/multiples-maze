@@ -25,6 +25,7 @@ let safeSet;
 let safeCellKeys;
 let antidoteNumber;
 let previousPathSignature = "";
+let usedPathSignatures = new Set();
 
 function keyFor(row, col) {
   return `${row},${col}`;
@@ -42,10 +43,6 @@ function shuffle(values) {
     [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
   }
   return copy;
-}
-
-function randomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function isInside(row, col) {
@@ -91,133 +88,115 @@ function pathHasVariedShape(path) {
   return horizontalMoves >= 4 && turns >= 4;
 }
 
-function createHiddenPath() {
+function pathSignature(path) {
+  return path.join("|");
+}
+
+function isNewRoute(path) {
+  const signature = pathSignature(path);
+  return signature !== previousPathSignature && !usedPathSignatures.has(signature);
+}
+
+function buildZigzagPath(turnRows, columns) {
   const startKey = keyFor(startPosition.row, startPosition.col);
-  const antidoteKey = keyFor(antidotePosition.row, antidotePosition.col);
+  const path = [startKey];
+  const visited = new Set(path);
+  const current = { ...startPosition };
 
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const turnRows = shuffle([10, 9, 8, 7, 6, 5, 4, 3, 2])
-      .slice(0, 3)
-      .sort((left, right) => right - left);
-    const firstSide = Math.random() < 0.5 ? -1 : 1;
-    const columns = turnRows.map((_, index) => {
-      const direction = index % 2 === 0 ? firstSide : -firstSide;
-      return startPosition.col + direction * randomInt(1, 2);
-    });
-    const path = [startKey];
-    const visited = new Set(path);
-    const current = { ...startPosition };
-
-    function append(row, col) {
-      const nextKey = keyFor(row, col);
-      if (visited.has(nextKey)) {
-        return false;
-      }
-      visited.add(nextKey);
-      path.push(nextKey);
-      current.row = row;
-      current.col = col;
-      return true;
+  function append(row, col) {
+    const nextKey = keyFor(row, col);
+    if (visited.has(nextKey)) {
+      return false;
     }
+    visited.add(nextKey);
+    path.push(nextKey);
+    current.row = row;
+    current.col = col;
+    return true;
+  }
 
-    function walkHorizontal(targetCol) {
-      while (current.col !== targetCol) {
-        const step = Math.sign(targetCol - current.col);
-        if (!append(current.row, current.col + step)) {
-          return false;
-        }
+  function walkHorizontal(targetCol) {
+    while (current.col !== targetCol) {
+      const step = Math.sign(targetCol - current.col);
+      if (!append(current.row, current.col + step)) {
+        return null;
       }
-      return true;
     }
+    return path;
+  }
 
-    function walkVertical(targetRow) {
-      while (current.row !== targetRow) {
-        const step = Math.sign(targetRow - current.row);
-        if (!append(current.row + step, current.col)) {
-          return false;
-        }
+  function walkVertical(targetRow) {
+    while (current.row !== targetRow) {
+      const step = Math.sign(targetRow - current.row);
+      if (!append(current.row + step, current.col)) {
+        return null;
       }
-      return true;
     }
+    return path;
+  }
 
-    const ok = turnRows.every((row, index) => {
-      return walkHorizontal(columns[index]) && walkVertical(row);
-    }) && walkHorizontal(startPosition.col) && walkVertical(antidotePosition.row);
-
-    const steps = path.length - 1;
-    if (
-      ok &&
-      path[path.length - 1] === antidoteKey &&
-      steps >= minPathSteps &&
-      steps <= maxPathSteps &&
-      pathHasVariedShape(path) &&
-      path.join("|") !== previousPathSignature
-    ) {
-      return path;
+  for (let index = 0; index < turnRows.length; index += 1) {
+    if (!walkHorizontal(columns[index]) || !walkVertical(turnRows[index])) {
+      return null;
     }
   }
 
-  const fallbackPaths = [
-    [
-      startKey,
-      keyFor(11, 6),
-      keyFor(10, 6),
-      keyFor(10, 5),
-      keyFor(9, 5),
-      keyFor(8, 5),
-      keyFor(8, 6),
-      keyFor(7, 6),
-      keyFor(6, 6),
-      keyFor(6, 7),
-      keyFor(5, 7),
-      keyFor(4, 7),
-      keyFor(4, 6),
-      keyFor(3, 6),
-      keyFor(2, 6),
-      keyFor(1, 6),
-      antidoteKey,
-    ],
-    [
-      startKey,
-      keyFor(12, 5),
-      keyFor(11, 5),
-      keyFor(10, 5),
-      keyFor(10, 6),
-      keyFor(9, 6),
-      keyFor(8, 6),
-      keyFor(8, 5),
-      keyFor(7, 5),
-      keyFor(6, 5),
-      keyFor(6, 6),
-      keyFor(5, 6),
-      keyFor(4, 6),
-      keyFor(3, 6),
-      keyFor(2, 6),
-      keyFor(1, 6),
-      antidoteKey,
-    ],
-    [
-      startKey,
-      keyFor(12, 7),
-      keyFor(11, 7),
-      keyFor(10, 7),
-      keyFor(10, 6),
-      keyFor(9, 6),
-      keyFor(8, 6),
-      keyFor(8, 7),
-      keyFor(7, 7),
-      keyFor(6, 7),
-      keyFor(6, 6),
-      keyFor(5, 6),
-      keyFor(4, 6),
-      keyFor(3, 6),
-      keyFor(2, 6),
-      keyFor(1, 6),
-      antidoteKey,
-    ],
-  ];
+  if (!walkHorizontal(startPosition.col) || !walkVertical(antidotePosition.row)) {
+    return null;
+  }
 
-  return shuffle(fallbackPaths).find((path) => path.join("|") !== previousPathSignature) || fallbackPaths[0];
+  return path;
+}
+
+function createHiddenPath() {
+  const antidoteKey = keyFor(antidotePosition.row, antidotePosition.col);
+  const rowOptions = [10, 9, 8, 7, 6, 5, 4, 3, 2];
+  const candidates = [];
+
+  for (let firstIndex = 0; firstIndex < rowOptions.length - 2; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < rowOptions.length - 1; secondIndex += 1) {
+      for (let thirdIndex = secondIndex + 1; thirdIndex < rowOptions.length; thirdIndex += 1) {
+        const turnRows = [
+          rowOptions[firstIndex],
+          rowOptions[secondIndex],
+          rowOptions[thirdIndex],
+        ];
+
+        [-1, 1].forEach((firstSide) => {
+          [1, 2].forEach((firstOffset) => {
+            [1, 2].forEach((secondOffset) => {
+              [1, 2].forEach((thirdOffset) => {
+                const columns = [firstOffset, secondOffset, thirdOffset].map((offset, index) => {
+                  const direction = index % 2 === 0 ? firstSide : -firstSide;
+                  return startPosition.col + direction * offset;
+                });
+                const path = buildZigzagPath(turnRows, columns);
+                const steps = path ? path.length - 1 : 0;
+
+                if (
+                  path &&
+                  path[path.length - 1] === antidoteKey &&
+                  steps >= minPathSteps &&
+                  steps <= maxPathSteps &&
+                  pathHasVariedShape(path) &&
+                  isNewRoute(path)
+                ) {
+                  candidates.push(path);
+                }
+              });
+            });
+          });
+        });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    usedPathSignatures = new Set([previousPathSignature]);
+    return createHiddenPath();
+  }
+
+  return shuffle(candidates)[0];
 }
 
 function generateSafeNumbers(count) {
@@ -242,7 +221,8 @@ function generateTrapNumbers(count) {
 function buildRunGrid() {
   const nextGrid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0));
   const hiddenPath = createHiddenPath();
-  previousPathSignature = hiddenPath.join("|");
+  previousPathSignature = pathSignature(hiddenPath);
+  usedPathSignatures.add(previousPathSignature);
   const pathNumbers = hiddenPath.slice(1);
   const pathSet = new Set(pathNumbers);
   const trapNumbers = generateTrapNumbers(rows * cols + 16);
